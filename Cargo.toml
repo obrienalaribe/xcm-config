@@ -1,0 +1,14 @@
+[patch."https://github.com/paritytech/polkadot"]
+xcm-executor = { path = "./xcm-executor" }
+
+[profile.release]
+panic = "unwind"
+
+[workspace]
+members = [
+	"node",
+	"pallets/*",
+	"runtime",
+	"xcm-simulator",
+	"xcm-executor"
+]
