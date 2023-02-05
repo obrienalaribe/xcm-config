@@ -21,6 +21,7 @@ use polkadot_parachain::primitives::Id as ParaId;
 use sp_runtime::traits::AccountIdConversion;
 pub use xcm_simulator::TestExt;
 use xcm_simulator::{decl_test_network, decl_test_parachain, decl_test_relay_chain};
+use crate::parachain::mock_msg_queue;
 
 pub const ALICE: sp_runtime::AccountId32 = sp_runtime::AccountId32::new([0u8; 32]);
 pub const BOB: sp_runtime::AccountId32 = sp_runtime::AccountId32::new([5u8; 32]);
@@ -32,6 +33,16 @@ decl_test_parachain! {
 		XcmpMessageHandler = parachain::MsgQueue,
 		DmpMessageHandler = parachain::MsgQueue,
 		new_ext = para_ext(1),
+	}
+}
+
+
+decl_test_parachain! {
+	pub struct ParaB {
+		Runtime = parachain::Runtime,
+		XcmpMessageHandler = parachain::MsgQueue,
+		DmpMessageHandler = parachain::MsgQueue,
+		new_ext = para_ext(2),
 	}
 }
 
@@ -48,6 +59,7 @@ decl_test_network! {
 		relay_chain = Relay,
 		parachains = vec![
 			(1, ParaA),
+			(2, ParaB),
 		],
 	}
 }
@@ -89,6 +101,8 @@ pub fn relay_ext() -> sp_io::TestExternalities {
 	ext
 }
 
+pub type ParachainMessageQueue = mock_msg_queue::Event<parachain::Runtime>;
+
 pub fn parachain_xcm_executed_successfully() -> bool {
 	let parachain_events = parachain::para_events();
 	parachain_events
@@ -97,6 +111,9 @@ pub fn parachain_xcm_executed_successfully() -> bool {
 			parachain::RuntimeEvent::PolkadotXcm(pallet_xcm::Event::Attempted(outcome)) => {
 				outcome.clone().ensure_complete().ok()
 			},
+			parachain::RuntimeEvent::MsgQueue(ParachainMessageQueue::ExecutedDownward(_, outcome)) => {
+				outcome.clone().ensure_complete().ok()
+			}
 			_ => None,
 		})
 		.is_some()
@@ -104,7 +121,143 @@ pub fn parachain_xcm_executed_successfully() -> bool {
 
 #[cfg(test)]
 mod tests {
-	// TODO: Define your tests here.
+	use frame_support::{assert_err, assert_ok};
+	use super::*;
+	use xcm::{latest::prelude::*, VersionedXcm};
+	use xcm::v0::Outcome::Complete;
+	use crate::parachain::para_events;
+
+	#[test]
+	fn paid_downward_xcm_from_relay_with_fees() {
+		MockNet::reset();
+		Relay::execute_with(|| {
+
+			let withdraw_amount = 100_000u128;
+
+			let asset: MultiAsset = ( Here.into(),  withdraw_amount.clone()).into()  ;
+
+			let message: Xcm<relay_chain::RuntimeCall> = Xcm(vec![
+				TransferReserveAsset {
+					assets: vec![asset].into(),
+					dest: X1(Parachain(1)).into(),
+					xcm: Xcm(vec![
+						BuyExecution {
+							fees: (Parent, withdraw_amount).into(),
+							weight_limit: Unlimited
+						},
+						DepositAsset {
+							assets: Wild(All),
+							max_assets: 1,
+							beneficiary: X1(AccountId32 { network: NetworkId::Any, id: BOB.into() }).into() }
+					])
+				}
+			]);
+
+			assert_ok!(RelayChainPalletXcm::execute(
+				relay_chain::RuntimeOrigin::signed(ALICE),
+				Box::new(VersionedXcm::V2(message.into())),
+				100_000_000
+			));
+
+			assert_eq!(
+				RelayChainPalletBalances::free_balance(ALICE),
+				INITIAL_BALANCE - withdraw_amount
+			);
+
+			
+		});
+		
+		ParaA::execute_with(|| {
+			let events = parachain::para_events();
+			// println!("Events {:?}", events);
+			assert!(parachain_xcm_executed_successfully());
+
+			// Ensure the balance has been withdrawn
+			assert_eq!(ParachainPalletBalances::free_balance(BOB), 100_000);
+		});
+
+		}
+
+	#[test]
+	fn unpaid_downward_xcm_from_relay_also_passes(){
+		MockNet::reset();
+		Relay::execute_with(|| {
+
+			let withdraw_amount = 100_000u128;
+
+			let asset: MultiAsset = ( Here.into(),  withdraw_amount.clone()).into()  ;
+
+			let message: Xcm<relay_chain::RuntimeCall> = Xcm(vec![
+				TransferReserveAsset {
+					assets: vec![asset].into(),
+					dest: X1(Parachain(1)).into(),
+					xcm: Xcm(vec![
+						BuyExecution {
+							fees: (Parent, withdraw_amount).into(),
+							weight_limit: Unlimited
+						},
+						DepositAsset {
+							assets: Wild(All),
+							max_assets: 1,
+							beneficiary: X1(AccountId32 { network: NetworkId::Any, id: BOB.into() }).into() }
+					])
+				}
+			]);
+
+			assert_ok!(RelayChainPalletXcm::execute(
+				relay_chain::RuntimeOrigin::signed(ALICE),
+				Box::new(VersionedXcm::V2(message.into())),
+				100_000_000
+			));
+
+			assert_eq!(
+				RelayChainPalletBalances::free_balance(ALICE),
+				INITIAL_BALANCE - withdraw_amount
+			);
+
+
+		});
+
+		ParaA::execute_with(|| {
+			// Testing unsuccessful without fees
+			assert!(parachain_xcm_executed_successfully());
+
+			// Ensure the balance has been withdrawn
+			assert_eq!(ParachainPalletBalances::free_balance(BOB), 100_000);
+		});
+
+	}
+
+	#[test]
+	fn unpaid_xcm_from_another_parachain(){
+		MockNet::reset();
+
+		ParaA::execute_with(|| {
+			let withdraw_amount = 100_000u128;
+
+			let asset: MultiAsset = (Here.into(), withdraw_amount.clone()).into();
+
+			let message: Xcm<relay_chain::RuntimeCall> = Xcm(vec![
+				TransferReserveAsset {
+					assets: vec![asset].into(),
+					dest: X1(Parachain(2)).into(),
+					xcm: Xcm(vec![
+						// BuyExecution {
+						// 	fees: (Parent, withdraw_amount).into(),
+						// 	weight_limit: Unlimited
+						// },
+						DepositAsset {
+							assets: Wild(All),
+							max_assets: 1,
+							beneficiary: X1(AccountId32 { network: NetworkId::Any, id: BOB.into() }).into()
+						}
+					])
+				}
+			]);
+
+		});
+
+	}
 }
 
 pub type RelayChainPalletXcm = pallet_xcm::Pallet<relay_chain::Runtime>;

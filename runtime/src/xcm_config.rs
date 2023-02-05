@@ -1,14 +1,15 @@
+use std::marker::PhantomData;
 use super::{
 	AccountId, Balances, ParachainInfo, ParachainSystem, PolkadotXcm, Runtime, RuntimeCall,
 	RuntimeEvent, RuntimeOrigin, WeightToFee, XcmpQueue,
 };
-use frame_support::{
-	match_types, parameter_types,
-	traits::Nothing,
-};
+use frame_support::{ensure, match_types, parameter_types, traits::Nothing};
+use frame_support::traits::Contains;
 use polkadot_runtime_common::impls::ToAuthor;
 use xcm::latest::prelude::*;
+use xcm::v2::Weight;
 use xcm_builder::*;
+use xcm_executor::traits::ShouldExecute;
 use xcm_executor::XcmExecutor;
 
 parameter_types! {
@@ -19,7 +20,7 @@ parameter_types! {
 }
 
 // TODO Assigment 4 - Define your LocationToAccountId.
-pub type LocationToAccountId = ();
+pub type LocationToAccountId = (AccountId32Aliases<RelayNetwork, AccountId>);
 
 parameter_types! {
 	// One XCM operation is 1_000_000_000 weight - almost certainly a conservative estimate.
@@ -35,13 +36,24 @@ match_types! {
 }
 
 // TODO Assigment 4 - Define your reserves.
-pub type Reserves = ();
+pub type Reserves = NativeAsset;
 
 // TODO Assigment 4 - Define your AssetTransactors .
-type AssetTransactors = ();
+pub type AssetTransactors = CurrencyAdapter<Balances, IsConcrete<TokenLocation>, LocationToAccountId, AccountId, ()>;
+
+match_types! {
+	pub type ParentOrParentsUnitPlurality: impl Contains<MultiLocation> = {
+		MultiLocation { parents: 1, interior: Here } |
+		MultiLocation { parents: 1, interior: X1(Plurality { id: BodyId::Unit, .. }) }
+	};
+}
 
 // TODO Assigment 4 - Define your Barrier.
-type Barrier = ();
+pub type Barrier = (
+	AllowTopLevelPaidExecutionFrom<Everything>,
+	AllowUnpaidExecutionFrom<ParentOrParentsUnitPlurality>,
+);
+
 
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {

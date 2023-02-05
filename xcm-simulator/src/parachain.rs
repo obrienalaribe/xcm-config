@@ -16,12 +16,9 @@
 
 //! Parachain runtime mock.
 
+use std::marker::PhantomData;
 use codec::{Decode, Encode};
-use frame_support::{
-	construct_runtime, parameter_types,
-	traits::{Everything, Nothing},
-	weights::Weight,
-};
+use frame_support::{construct_runtime, ensure, match_types, parameter_types, traits::{Everything, Nothing}, weights::Weight};
 use sp_core::H256;
 use sp_runtime::{
 	testing::Header,
@@ -97,7 +94,7 @@ parameter_types! {
 }
 
 // Copy the LocationToAccountId configured in your parachain.
-pub type LocationToAccountId = ();
+pub type LocationToAccountId = AccountId32Aliases<RelayNetwork, AccountId>;
 
 pub type XcmOriginToCallOrigin = (SignedAccountId32AsNative<RelayNetwork, RuntimeOrigin>,);
 
@@ -108,15 +105,26 @@ parameter_types! {
 }
 
 // Copy the AssetTransactors configured in your parachain.
-pub type AssetTransactors = ();
+pub type AssetTransactors = CurrencyAdapter<Balances, IsConcrete<TokenLocation>, LocationToAccountId, AccountId, ()>;
 
 pub type XcmRouter = super::ParachainXcmRouter<MsgQueue>;
 
+match_types! {
+	pub type ParentOrParentsUnitPlurality: impl Contains<MultiLocation> = {
+		MultiLocation { parents: 1, interior: Here } |
+		MultiLocation { parents: 1, interior: X1(Plurality { id: BodyId::Unit, .. }) }
+	};
+}
+
 // Copy the Barrier configured in your parachain.
-pub type Barrier = ();
+pub type Barrier = (
+	AllowTopLevelPaidExecutionFrom<Everything>,
+	// AllowUnpaidExecutionFrom<ParentOrParentsUnitPlurality>,
+);
+
 
 // Copy the Reserves configured in your parachain.
-pub type Reserves = ();
+pub type Reserves = NativeAsset;
 
 pub struct XcmConfig;
 impl Config for XcmConfig {
@@ -124,7 +132,7 @@ impl Config for XcmConfig {
 	type XcmSender = XcmRouter;
 	type AssetTransactor = AssetTransactors;
 	type OriginConverter = XcmOriginToCallOrigin;
-	type IsReserve = ();
+	type IsReserve = Reserves;
 	type IsTeleporter = ();
 	type LocationInverter = LocationInverter<Ancestry>;
 	type Barrier = Barrier;
@@ -377,7 +385,9 @@ pub fn para_events() -> Vec<RuntimeEvent> {
 		.collect::<Vec<_>>()
 }
 
-use frame_support::traits::{OnFinalize, OnInitialize, OnRuntimeUpgrade};
+use frame_support::traits::{Contains, OnFinalize, OnInitialize, OnRuntimeUpgrade};
+use xcm_executor::traits::ShouldExecute;
+
 pub fn on_runtime_upgrade() {
 	PolkadotXcm::on_runtime_upgrade();
 }

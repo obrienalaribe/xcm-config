@@ -1,29 +1,31 @@
 # Assignment #4 - Polkadot and XCM
 
-## !! See [ASSIGNMENT.md](./ASSIGNMENT.md) for instructions to complete this assignment !!
+#### Due to some personal reasons and also losing my job over the weekend, i was unable to focus on this assignment but i've detailed what i have implemented below
 
-**_TODO: Update this README for the Grading Team about your project!_**
+My XCM config is as follows
 
----
+### Barrier
+My Barrier was set to require only unpaid transactions from the relay. The reason for this was because i wanted to test the differences of both attributes
+for paid and unpaid executions on the relay and parachain but obviously in reality you want everything to be a paid execution to have a more trustless way of communicating between the relay and parachain
 
-## Substrate Cumulus Parachain Template
+```rust 
+pub type Barrier = (
+	AllowTopLevelPaidExecutionFrom<Everything>,
+	AllowUnpaidExecutionFrom<ParentOrParentsUnitPlurality>,
+);
+```
 
-A new [Cumulus](https://github.com/paritytech/cumulus/)-based Substrate node, ready for hacking ☁️..
+### AssetTransactor
+For Fungible assets i noticed that the order in which it handles Local & Fungible assets matter. I was not able to finish my implementation but i have an idea on how to do it
 
-This project is originally a fork of the
-[Substrate Node Template](https://github.com/substrate-developer-hub/substrate-node-template)
-modified to include dependencies required for registering this node as a **parathread** or
-**parachain** to a **relay chain**.
 
-The stand-alone version of this template is hosted on the
-[Substrate Devhub Parachain Template](https://github.com/substrate-developer-hub/substrate-parachain-template/)
-for each release of Polkadot. It is generated directly to the upstream
-[Parachain Template in Cumulus](https://github.com/paritytech/cumulus/tree/master/parachain-template)
-at each release branch using the
-[Substrate Template Generator](https://github.com/paritytech/substrate-template-generator/).
+### Reserves
+This is configured to use NativeAsset to the correspoding chain. But in the case of Fungibility it is expected to mint the same Asset on receiving chain
+```rust
+pub type Reserves = NativeAsset;
+```
 
-👉 Learn more about parachains [here](https://wiki.polkadot.network/docs/learn-parachains), and
-parathreads [here](https://wiki.polkadot.network/docs/learn-parathreads).
-
-🧙 Learn about how to use this template and run your own parachain testnet for it in the
-[Devhub Cumulus Tutorial](https://docs.substrate.io/tutorials/v3/cumulus/start-relay/).
+I would have liked to:
+- Test out my Barriers more and multiple configurations on the relaychain and parachain and seeing its impact
+- Building the pallet piece
+- Implement Fungible Assets
