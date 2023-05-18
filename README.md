@@ -1,7 +1,4 @@
-# Assignment #4 - Polkadot and XCM
-
-#### Due to some personal reasons and also losing my job over the weekend, i was unable to focus on this assignment but i've detailed what i have implemented below
-
+# Polkadot and XCM Config
 My XCM config is as follows
 
 ### Barrier
@@ -29,3 +26,4 @@ I would have liked to:
 - Test out my Barriers more and multiple configurations on the relaychain and parachain and seeing its impact
 - Building the pallet piece
 - Implement Fungible Assets# xcm-config
+# xcm-config
