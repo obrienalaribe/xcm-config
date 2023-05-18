@@ -26,4 +26,3 @@ I would have liked to:
 - Test out my Barriers more and multiple configurations on the relaychain and parachain and seeing its impact
 - Building the pallet piece
 - Implement Fungible Assets# xcm-config
-# xcm-config
